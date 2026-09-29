@@ -18,6 +18,38 @@ Client (AWS SDK / CLI)  ->  AgentCore Runtime  ->  Strands agent  ->  Foundation
                                                   sample_repo/
 ```
 
+### Request flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client (AWS SDK or CLI)
+    participant R as AgentCore Runtime
+    participant A as Strands agent
+    participant M as Foundation model on Bedrock
+    participant T as Tools (search_code, read_file)
+    C->>R: invoke with a prompt
+    R->>A: entrypoint receives the payload
+    loop until answered or the tool call budget is reached
+        A->>M: question plus tool results so far
+        M-->>A: tool call or final answer
+        A->>T: search_code or read_file
+        T-->>A: snippets with path and line range
+    end
+    A-->>R: answer with citations, or Not found in the code.
+    R-->>C: result
+```
+
+### Evaluation flow
+
+```mermaid
+flowchart LR
+    G[golden_set.json<br/>11 questions] --> E[run_eval.py]
+    E --> RET[Retrieval eval<br/>recall at k and MRR]
+    E --> ANS[Answer eval<br/>fact coverage and refusal check]
+    RET --> OUT[Scores in the README]
+    ANS --> OUT
+```
+
 | Piece | What it does |
 |---|---|
 | `agent.py` | Strands agent wrapped with `BedrockAgentCoreApp`; `@app.entrypoint` accepts `{"prompt": "..."}` |
