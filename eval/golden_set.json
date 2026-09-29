@@ -1,0 +1,69 @@
+[
+  {
+    "id": "q1",
+    "question": "How are retries configured for the payment service?",
+    "expected_files": ["application.yml", "PaymentClient.java"],
+    "expected_facts": ["3", "200ms", "exponential"]
+  },
+  {
+    "id": "q2",
+    "question": "What happens when the payment circuit breaker opens?",
+    "expected_files": ["PaymentClient.java", "application.yml"],
+    "expected_facts": ["fallback", "PaymentUnavailableException", "30s"]
+  },
+  {
+    "id": "q3",
+    "question": "How does the system prevent duplicate orders when a client retries a create request?",
+    "expected_files": ["OrderService.java", "IdempotencyStore.java", "OrderController.java"],
+    "expected_facts": ["Idempotency-Key", "Redis"]
+  },
+  {
+    "id": "q4",
+    "question": "How long are idempotency keys kept?",
+    "expected_files": ["IdempotencyStore.java"],
+    "expected_facts": ["24 hours"]
+  },
+  {
+    "id": "q5",
+    "question": "Which Kafka topic are order events published to, and what is the message key?",
+    "expected_files": ["OrderEventPublisher.java"],
+    "expected_facts": ["order-events", "order id", "partition"]
+  },
+  {
+    "id": "q6",
+    "question": "What happens to order events that fail to publish?",
+    "expected_files": ["OrderEventPublisher.java"],
+    "expected_facts": ["dead letter", "order-events.dlq"]
+  },
+  {
+    "id": "q7",
+    "question": "Can a shipped order be cancelled?",
+    "expected_files": ["OrderService.java"],
+    "expected_facts": ["cannot", "SHIPPED"]
+  },
+  {
+    "id": "q8",
+    "question": "What are the connect and read timeouts for the payments HTTP client?",
+    "expected_files": ["application.yml"],
+    "expected_facts": ["500", "2000"]
+  },
+  {
+    "id": "q9",
+    "question": "What validation is applied when an order is created?",
+    "expected_files": ["OrderService.java"],
+    "expected_facts": ["at least one item", "positive total"]
+  },
+  {
+    "id": "q10",
+    "question": "Which Kafka producer settings protect against message loss or duplication?",
+    "expected_files": ["application.yml"],
+    "expected_facts": ["acks", "all", "idempotence"]
+  },
+  {
+    "id": "q11",
+    "question": "How does the service handle GraphQL subscriptions?",
+    "expected_files": [],
+    "expected_facts": ["not found"],
+    "note": "Unanswerable on purpose. The agent should say the code does not contain this instead of inventing an answer."
+  }
+]
