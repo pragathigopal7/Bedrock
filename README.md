@@ -137,6 +137,39 @@ agentcore invoke '{"prompt": "What happens when the payment circuit breaker open
 
 Point it at your own repo with `REPO_ROOT=/path/to/repo`.
 
+### Windows (PowerShell)
+
+The retrieval eval has been run on Windows 11 with Python in a virtual environment and matches the Linux output. The agent and the AgentCore deploy steps below have not been verified on Windows yet.
+
+```powershell
+git clone https://github.com/pragathigopal7/Bedrock.git
+cd Bedrock
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt bedrock-agentcore-starter-toolkit
+
+# Retrieval eval, no AWS needed
+python eval\run_eval.py --k 3
+
+# Agent and deploy, needs AWS credentials and Bedrock model access
+aws configure
+$env:MODEL_ID = "<a Bedrock model ID enabled in your account>"
+python agent.py
+```
+
+Call the local agent from a second PowerShell window:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/invocations `
+  -ContentType "application/json" `
+  -Body '{"prompt": "How are retries configured for the payment service?"}'
+```
+
+Troubleshooting:
+- If `Activate.ps1` is blocked, run `Set-ExecutionPolicy -Scope Process Bypass` in the same window and try again.
+- If `aws` is not found, install the AWS CLI first.
+- Environment variables set with `$env:` last only for the current PowerShell window.
+
 ## Next steps
 
 1. **Semantic retrieval:** add Amazon Titan embeddings and a vector store, then compare recall@k and MRR against the BM25 baseline using the same golden set.
