@@ -37,16 +37,34 @@ The golden set has 10 answerable questions with expected source files and expect
 | Answer | fact coverage | Does the answer contain the expected facts? |
 | Safety | refusal rate | Does it say the code lacks the answer for the unanswerable question? |
 
-Retrieval baseline on the sample repo (run locally, no AWS needed):
+### Results: retrieval baseline (BM25)
+
+Run locally on the sample repo, no AWS needed. The output was identical on Linux and on Windows 11 (PowerShell, Python venv).
 
 ```
-python eval/run_eval.py --k 3
+python eval\run_eval.py --k 3
 Retrieval: recall@3 = 100%, MRR = 0.88 over 10 questions
+  PASS  q1  rank=1  How are retries configured for the payment service?
+  PASS  q2  rank=1  What happens when the payment circuit breaker opens?
+  PASS  q3  rank=1  How does the system prevent duplicate orders when a client retries a create request?
+  PASS  q4  rank=1  How long are idempotency keys kept?
+  PASS  q5  rank=1  Which Kafka topic are order events published to, and what is the message key?
+  PASS  q6  rank=1  What happens to order events that fail to publish?
+  PASS  q7  rank=1  Can a shipped order be cancelled?
+  PASS  q8  rank=3  What are the connect and read timeouts for the payments HTTP client?
+  PASS  q9  rank=1  What validation is applied when an order is created?
+  PASS  q10  rank=2  Which Kafka producer settings protect against message loss or duplication?
 ```
 
-The MRR below 1.0 shows where ranking is imperfect (the timeout and Kafka producer questions rank the right file 3rd and 2nd). That is the motivation for the next step below.
+| Metric | Result |
+|---|---|
+| recall@3 | 100% (10 of 10) |
+| MRR | 0.88 |
+| Right file ranked first | 8 of 10 |
 
-Answer accuracy requires Bedrock access: `python eval/run_eval.py --answers`. Record your own numbers in the table before quoting them anywhere.
+The MRR below 1.0 shows where ranking is imperfect: the timeout question (q8) ranks the right file 3rd and the Kafka producer settings question (q10) ranks it 2nd. That is the motivation for the semantic retrieval step below. The unanswerable question (q11) is excluded from retrieval scoring and is only used in the answer evaluation.
+
+Answer accuracy requires Bedrock access and has not been run yet: `python eval/run_eval.py --answers`. Add the results here once it has.
 
 ## Run it
 
