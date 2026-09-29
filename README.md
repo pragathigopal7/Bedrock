@@ -62,7 +62,22 @@ Retrieval: recall@3 = 100%, MRR = 0.88 over 10 questions
 | MRR | 0.88 |
 | Right file ranked first | 8 of 10 |
 
-The MRR below 1.0 shows where ranking is imperfect: the timeout question (q8) ranks the right file 3rd and the Kafka producer settings question (q10) ranks it 2nd. That is the motivation for the semantic retrieval step below. The unanswerable question (q11) is excluded from retrieval scoring and is only used in the answer evaluation.
+The MRR below 1.0 shows where ranking is imperfect: the timeout question (q8) ranks the right file 3rd and the Kafka producer settings question (q10) ranks it 2nd. The unanswerable question (q11) is excluded from retrieval scoring and is only used in the answer evaluation.
+
+### Improvement: chunk YAML by top level section
+
+**Diagnosis:** `application.yml` was indexed as a single 38 line chunk, so all of its terms were diluted, and a Java chunk that mentioned the same words outranked it.
+
+**Change:** split YAML files into one chunk per top level section (`spring`, `payments`, `resilience4j`), so each config block is scored on its own terms.
+
+| Metric | Before | After |
+|---|---|---|
+| recall@3 | 100% | 100% |
+| MRR | 0.88 | 0.95 |
+| q10 (Kafka producer settings) | rank 2 | rank 1 |
+| q8 (payments timeouts) | rank 3 | rank 2 |
+
+q8 still ranks 2nd because the top hit, `PaymentClient.java`, has a comment that also mentions those timeouts. I did not tune further, since that would fit the eval set instead of improving retrieval. Semantic retrieval (below) is the next test.
 
 Answer accuracy requires Bedrock access and has not been run yet: `python eval/run_eval.py --answers`. Add the results here once it has.
 

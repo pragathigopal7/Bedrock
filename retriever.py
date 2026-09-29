@@ -18,6 +18,8 @@ METHOD_RE = re.compile(
     r"^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:public|private|protected)\s+[\w<>\[\],.? ]+\s+\w+\s*\([^;]*$"
 )
 MAX_CHUNK_LINES = 40
+YAML_SUFFIXES = {".yml", ".yaml"}
+YAML_SECTION_RE = re.compile(r"^[A-Za-z_][\w.-]*:\s*(?:#.*)?$")
 
 
 @dataclass
@@ -39,9 +41,15 @@ def tokenize(text: str) -> list[str]:
 
 
 def _chunk_file(rel_path: str, lines: list[str]) -> list[Chunk]:
-    """Start a new chunk at each method signature; cap chunk length for everything else."""
+    """Start a new chunk at each method signature (or YAML top level section); cap chunk length."""
     starts = [0]
+    is_yaml = Path(rel_path).suffix in YAML_SUFFIXES
     for i, line in enumerate(lines):
+        if is_yaml:
+            # one chunk per top level section, so each config block is scored on its own terms
+            if i > 0 and YAML_SECTION_RE.match(line):
+                starts.append(i)
+            continue
         if i > 0 and METHOD_RE.match(line):
             # pull annotations sitting directly above the signature into this chunk
             j = i
