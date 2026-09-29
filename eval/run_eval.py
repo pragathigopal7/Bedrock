@@ -67,6 +67,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--answers", action="store_true", help="also score agent answers via Bedrock")
     parser.add_argument("--k", type=int, default=3)
+    parser.add_argument(
+        "--min-recall",
+        type=float,
+        default=0.0,
+        help="exit with code 1 if retrieval recall@k is below this value (used by CI)",
+    )
     args = parser.parse_args()
 
     cases = json.loads((ROOT / "eval" / "golden_set.json").read_text())
@@ -76,6 +82,10 @@ def main() -> None:
     print(f"Retrieval: recall@{r['k']} = {r['recall_at_k']:.0%}, MRR = {r['mrr']:.2f} over {r['n']} questions")
     for qid, hit, rank, question in r["rows"]:
         print(f"  {'PASS' if hit else 'MISS'}  {qid}  rank={rank}  {question}")
+
+    if r["recall_at_k"] < args.min_recall:
+        print(f"\nFAIL: recall@{r['k']} {r['recall_at_k']:.0%} is below the required {args.min_recall:.0%}")
+        sys.exit(1)
 
     if args.answers:
         a = answer_eval(cases)
