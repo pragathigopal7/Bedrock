@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codebase Q&amp;A Agent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233451d1'/%3E%3Ctext x='16' y='21.5' font-family='monospace' font-size='15' font-weight='700' fill='white' text-anchor='middle'%3E%7B%7D%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #f9fafb; --border: #e2e5ea;
+  --text: #1a1d21; --muted: #5d6570;
+  --accent: #3451d1; --accent-soft: #eaeefd; --accent-text: #ffffff;
+  --ok: #17784a; --ok-soft: #e3f4eb; --warn: #8a5300; --warn-soft: #fdf1dc; --bad: #b3261e; --bad-soft: #fbe9e7;
+  --code-bg: #f4f6f9; --hl: #fff1b8; --hl-edge: #d9a900;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .07);
+  --radius: 10px;
+  --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116; --surface: #161a21; --surface-2: #1b2029; --border: #2a303b;
+    --text: #e7eaf0; --muted: #9aa3b1;
+    --accent: #8fa2ff; --accent-soft: #1f2747; --accent-text: #0e1116;
+    --ok: #56c98f; --ok-soft: #13291f; --warn: #f2b655; --warn-soft: #2c2413; --bad: #ff8b80; --bad-soft: #2e1614;
+    --code-bg: #0f1319; --hl: #3b3212; --hl-edge: #c9a227;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+body.modal-open { overflow: hidden; }
+code { font-family: var(--mono); font-size: .92em; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 24px 0 16px; }
+.brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.logo { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; background: var(--accent); color: var(--accent-text);
+  display: grid; place-items: center; font: 700 15px var(--mono); }
+h1 { font-size: 20px; line-height: 1.25; margin: 0; letter-spacing: -.01em; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); font-size: 13px; color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pill .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.live { color: var(--ok); }
+.pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 22px; overflow-x: auto; }
+.tab { appearance: none; border: 0; background: none; padding: 10px 14px; font: 500 14px var(--sans); color: var(--muted); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab:focus-visible, .chip:focus-visible, .cite:focus-visible, .btn:focus-visible, .icon-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+
+form.ask { display: flex; gap: 10px; }
+form.ask input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); font: 15px var(--sans); box-shadow: var(--shadow); }
+form.ask input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; border-color: var(--accent); }
+.btn { padding: 0 22px; border-radius: var(--radius); border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text);
+  font: 600 14px var(--sans); cursor: pointer; }
+.btn:disabled { opacity: .55; cursor: progress; }
+.btn.ghost { background: var(--surface); color: var(--text); border-color: var(--border); padding: 7px 14px; font-weight: 500; }
+
+.samples { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 24px; }
+.samples .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 2px; }
+#rest:not([hidden]) { display: contents; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 12px;
+  font: 13px var(--sans); cursor: pointer; text-align: left; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip .tag { font-size: 11px; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 1px 6px; margin-left: 4px; }
+.chip.more { color: var(--muted); }
+
+.notice { border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 14px;
+  border-radius: 8px; font-size: 14px; margin-bottom: 14px; }
+.notice.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+.asked { font-weight: 600; margin: 0 0 12px; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.empty { color: var(--muted); }
+
+.card, .snippet, .answer, .trace-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.pad { padding: 14px 18px; }
+.snippet { margin-bottom: 12px; overflow: hidden; }
+.snippet header { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.score { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.cite { font: 12.5px var(--mono); color: var(--accent); background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px;
+  padding: 2px 7px; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.cite:hover { border-color: var(--accent); }
+
+.code { font: 12.5px/1.6 var(--mono); background: var(--code-bg); overflow-x: auto; padding: 6px 0; }
+.line { display: flex; white-space: pre; min-width: max-content; }
+.line .ln { flex: 0 0 3.4em; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; opacity: .75; }
+.line .src { padding-right: 16px; }
+.line.hl { background: var(--hl); box-shadow: inset 3px 0 0 var(--hl-edge); }
+
+.answer { padding: 16px 18px; margin-bottom: 16px; }
+.answer-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.answer-head h2 { font-size: 15px; margin: 0; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--muted); white-space: nowrap; }
+.badge.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.badge.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.badge.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.badge.info { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.answer-body { overflow-wrap: anywhere; }
+.answer-body code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.checks { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.checks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.checks li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.mark { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.checks li.ok .mark { background: var(--ok-soft); color: var(--ok); }
+.checks li.bad .mark { background: var(--bad-soft); color: var(--bad); }
+.why { color: var(--muted); }
+
+.trace-wrap { padding: 14px 18px; }
+ol.trace { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.call { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.step { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+  font: 600 12px var(--sans); display: grid; place-items: center; }
+.fn { font: 600 13px var(--mono); }
+.args { font: 12.5px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+details { margin: 6px 0 0 30px; }
+summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+details pre { font: 12px/1.5 var(--mono); background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  overflow: auto; max-height: 320px; margin: 8px 0 0; }
+
+.loading { display: flex; align-items: center; gap: 10px; color: var(--muted); padding: 18px 4px; }
+.spinner { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.tile .k { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.tile .v { font-size: 28px; font-weight: 650; letter-spacing: -.02em; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12.5px; color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.grid th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600;
+  background: var(--surface-2); }
+table.grid th, table.grid td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.grid tr:last-child td { border-bottom: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); }
+.small { font-size: 12px; }
+.note { color: var(--muted); font-size: 13px; }
+.row-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+
+.flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 12px 14px;
+  box-shadow: var(--shadow); }
+.stage .n { font: 600 12px var(--mono); color: var(--accent); }
+.stage h4 { margin: 2px 0 4px; font-size: 14px; }
+.stage p { margin: 0; font-size: 13px; color: var(--muted); }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+ul.plain { margin: 0; padding-left: 18px; font-size: 14px; }
+ul.plain li { margin: 4px 0; }
+
+.viewer { position: fixed; inset: 0; background: rgba(10, 14, 20, .55); display: grid; place-items: center; padding: 24px; z-index: 10; }
+.viewer[hidden] { display: none; }
+.panel { width: min(980px, 100%); max-height: 88vh; display: flex; flex-direction: column; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, .25); }
+.panel .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border); font: 13px var(--mono); }
+.panel .bar span { overflow-wrap: anywhere; }
+.panel .body { overflow: auto; }
+.panel .body .code { overflow: visible; }
+.icon-btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 4px 10px;
+  font: 13px var(--sans); cursor: pointer; }
+
+footer.wrap { color: var(--muted); font-size: 12.5px; padding-top: 28px; padding-bottom: 36px; display: flex; gap: 12px; flex-wrap: wrap;
+  justify-content: space-between; }
+footer a { color: inherit; }
+
+@media (max-width: 860px) {
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols, .tiles { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  form.ask { flex-direction: column; }
+  .btn { padding: 11px; }
+  details { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">{ }</div>
+      <div>
+        <h1>Codebase Q&amp;A Agent</h1>
+        <p class="sub">Proof of concept for Amazon Bedrock AgentCore, built with the Strands Agents SDK</p>
+      </div>
+    </div>
+    <div id="mode" class="pill"><span class="dot"></span>Connecting</div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab active" role="tab" aria-selected="true" data-tab="ask">Ask</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="eval">Evaluation</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="how">How it works</button>
+  </nav>
+
+  <main>
+    <section id="tab-ask">
+      <form class="ask" id="ask-form" autocomplete="off">
+        <input id="q" name="q" maxlength="500" aria-label="Question"
+               placeholder="Ask about the code, for example: How are payment retries configured?">
+        <button class="btn" id="ask-btn" type="submit">Ask</button>
+      </form>
+      <div class="samples" id="samples"></div>
+      <div id="result">
+        <p class="empty">Ask a question about the sample Spring Boot service, or pick one of the examples above.
+          Citations open the exact lines in the source file.</p>
+      </div>
+    </section>
+
+    <section id="tab-eval" hidden>
+      <div id="eval-body"></div>
+    </section>
+
+    <section id="tab-how" hidden>
+      <div class="flow">
+        <div class="stage"><div class="n">01</div><h4>Question</h4><p>You ask in plain English.</p></div>
+        <div class="stage"><div class="n">02</div><h4>Strands agent</h4><p>Plans the search under a strict system prompt.</p></div>
+        <div class="stage"><div class="n">03</div><h4>Tools</h4><p><code>search_code</code> ranks method level chunks with BM25; <code>read_file</code> reads exact lines.</p></div>
+        <div class="stage"><div class="n">04</div><h4>Model</h4><p>A local model through Ollama, or a model on Amazon Bedrock.</p></div>
+        <div class="stage"><div class="n">05</div><h4>Answer</h4><p>Every claim cites <code>path:start-end</code>.</p></div>
+        <div class="stage"><div class="n">06</div><h4>Check</h4><p>The demo verifies each citation points to real lines.</p></div>
+      </div>
+      <div class="cols">
+        <div class="card pad">
+          <h3>Guardrails</h3>
+          <ul class="plain">
+            <li>At most <span id="budget">8</span> tool calls per question, so the agent cannot loop or run up cost.</li>
+            <li><code>read_file</code> refuses any path outside the repository.</li>
+            <li>Answers only from retrieved code, and says &ldquo;Not found in the code.&rdquo; instead of guessing.</li>
+            <li>Read only: the agent never changes code.</li>
+          </ul>
+        </div>
+        <div class="card pad">
+          <h3>Measured, not assumed</h3>
+          <ul class="plain">
+            <li>An 11 question golden set, including one question the code cannot answer.</li>
+            <li>Retrieval scored with recall@3 and MRR; see the Evaluation tab.</li>
+            <li>Unit tests and CI that fail the build if recall drops below 90%.</li>
+          </ul>
+        </div>
+        <div class="card pad">
+          <h3>Where it runs</h3>
+          <ul class="plain">
+            <li>This demo: a local web app on 127.0.0.1.</li>
+            <li>Production path: <code>agent.py</code> is an Amazon Bedrock AgentCore Runtime entrypoint, deployable with
+              <code>agentcore configure</code> and <code>agentcore launch</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="wrap">
+  <span>Runs locally on 127.0.0.1 &middot; <span id="footer-repo">sample_repo</span></span>
+  <a href="https://github.com/pragathigopal7/Bedrock" target="_blank" rel="noopener">github.com/pragathigopal7/Bedrock</a>
+</footer>
+
+<div class="viewer" id="viewer" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="viewer-title">
+    <div class="bar"><span id="viewer-title"></span><button class="icon-btn" id="viewer-close" type="button">Close</button></div>
+    <div class="body" id="viewer-body"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const state = { status: null, evalLoaded: false };
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const CITE_RE = /([\w./\\-]+\.(?:java|py|go|ya?ml|properties|xml|md)):(\d+)(?:-(\d+))?/g;
+const FEATURED = ["q7", "q3", "q5", "q10", "q11"];
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  let data;
+  try { data = await res.json(); } catch { data = { error: `Unexpected response (${res.status})` }; }
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+function citeButton(path, start, end, label) {
+  const text = label || `${path}:${start}-${end}`;
+  return `<button type="button" class="cite" data-path="${esc(path)}" data-start="${start}" data-end="${end}">${esc(text)}</button>`;
+}
+
+function codeBlock(lines, firstLine, hlStart, hlEnd) {
+  const rows = lines.map((line, i) => {
+    const n = firstLine + i;
+    const hl = hlStart && n >= hlStart && n <= hlEnd ? " hl" : "";
+    return `<div class="line${hl}" data-n="${n}"><span class="ln">${n}</span><span class="src">${esc(line) || " "}</span></div>`;
+  });
+  return `<div class="code">${rows.join("")}</div>`;
+}
+
+function formatAnswer(text) {
+  let html = esc(text);
+  html = html.replace(CITE_RE, (match, path, start, end) => citeButton(path, start, end || start, match));
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  html = html.replace(/^[ \t]*[-*][ \t]+/gm, "&bull; ");
+  return html.replace(/\n/g, "<br>");
+}
+
+function renderOffline(r) {
+  const cards = r.evidence.map((e) => `
+    <article class="snippet">
+      <header>${citeButton(e.path, e.start, e.end)}<span class="score">BM25 ${e.score.toFixed(2)}</span></header>
+      ${codeBlock(e.lines, e.start)}
+    </article>`).join("");
+  return `
+    <div class="notice"><strong>Offline mode.</strong> No model is connected, so there is no written answer yet.
+      These are the snippets the agent's <code>search_code</code> tool returns for your question, ranked by BM25 with file and line
+      citations. Retrieval always returns the closest matches; deciding whether they actually answer the question is the model's job.
+      Start the demo with <code>--llm ollama</code> for full agent answers.</div>
+    <p class="meta">${r.evidence.length} snippets &middot; ${r.elapsed_ms} ms</p>
+    ${cards || `<p class="empty">No matching code. The agent would answer: &ldquo;Not found in the code.&rdquo;</p>`}`;
+}
+
+function renderAgent(r) {
+  const verified = r.citations.filter((c) => c.valid).length;
+  const badges = [];
+  if (r.refused) badges.push(`<span class="badge info">Refused to guess</span>`);
+  if (r.citations.length) {
+    const all = verified === r.citations.length;
+    badges.push(`<span class="badge ${all ? "ok" : "warn"}">${verified} of ${r.citations.length} citations verified</span>`);
+  } else if (!r.refused) {
+    badges.push(`<span class="badge warn">No citations</span>`);
+  }
+  badges.push(`<span class="badge">${r.tool_calls.length} of ${r.tool_budget} tool calls</span>`);
+  badges.push(`<span class="badge">${(r.elapsed_ms / 1000).toFixed(1)} s</span>`);
+
+  const checks = r.citations.map((c) => `
+    <li class="${c.valid ? "ok" : "bad"}"><span class="mark" aria-hidden="true">${c.valid ? "&#10003;" : "&#10005;"}</span>
+      ${citeButton(c.path, c.start, c.end, c.ref)}<span class="why">${c.valid ? "file and lines exist" : "file or line range not found"}</span></li>`).join("");
+
+  const trace = r.tool_calls.map((t, i) => `
+    <li>
+      <div class="call"><span class="step">${i + 1}</span><code class="fn">${esc(t.name)}</code>
+        <code class="args">${esc(JSON.stringify(t.input))}</code>${t.status === "error" ? `<span class="badge bad">error</span>` : ""}</div>
+      <details><summary>Tool output</summary><pre>${esc(t.output || "(empty)")}</pre></details>
+    </li>`).join("");
+
+  return `
+    <article class="answer">
+      <div class="answer-head"><h2>Answer</h2><div class="badges">${badges.join("")}</div></div>
+      <div class="answer-body">${formatAnswer(r.answer)}</div>
+      ${checks ? `<div class="checks"><h3>Citation check</h3><ul>${checks}</ul></div>` : ""}
+    </article>
+    <section class="trace-wrap"><h3>Agent trace</h3>
+      ${trace ? `<ol class="trace">${trace}</ol>` : `<p class="empty">The agent answered without calling a tool.</p>`}
+    </section>`;
+}
+
+async function ask(question) {
+  question = (question || "").trim();
+  if (!question) { $("#q").focus(); return; }
+  $("#q").value = question;
+  const button = $("#ask-btn");
+  const out = $("#result");
+  button.disabled = true;
+  const waiting = state.status && state.status.mode === "agent"
+    ? "The agent is searching the code and writing an answer. Local models can take a minute."
+    : "Searching the code&hellip;";
+  out.innerHTML = `<div class="loading"><span class="spinner"></span>${waiting}</div>`;
+  try {
+    const r = await api("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    out.innerHTML = `<p class="asked">${esc(r.question)}</p>` + (r.mode === "agent" ? renderAgent(r) : renderOffline(r));
+  } catch (err) {
+    out.innerHTML = `<div class="notice bad"><strong>Something went wrong.</strong> ${esc(err.message)}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function openFile(path, start, end) {
+  const viewer = $("#viewer");
+  viewer.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#viewer-title").textContent = path;
+  $("#viewer-body").innerHTML = `<div class="loading"><span class="spinner"></span>Loading&hellip;</div>`;
+  $("#viewer-close").focus();
+  try {
+    const f = await api(`/api/file?path=${encodeURIComponent(path)}`);
+    $("#viewer-title").textContent = `${f.path}  (lines ${start} to ${end})`;
+    $("#viewer-body").innerHTML = codeBlock(f.lines, 1, start, end);
+    const first = $(`#viewer-body .line[data-n="${start}"]`);
+    if (first) first.scrollIntoView({ block: "center" });
+  } catch (err) {
+    $("#viewer-body").innerHTML = `<div class="notice bad" style="margin:14px">${esc(err.message)}</div>`;
+  }
+}
+
+function closeViewer() {
+  $("#viewer").hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+async function loadEval() {
+  const box = $("#eval-body");
+  box.innerHTML = `<div class="loading"><span class="spinner"></span>Scoring retrieval on the golden set&hellip;</div>`;
+  try {
+    const r = await api("/api/eval");
+    state.evalLoaded = true;
+    const hits = r.rows.filter((row) => row.hit).length;
+    const rows = r.rows.map((row) => `
+      <tr>
+        <td class="mono">${esc(row.id)}</td>
+        <td>${esc(row.question)}</td>
+        <td class="mono small">${row.expected.map(esc).join("<br>")}</td>
+        <td class="num">${row.rank ?? "none"}</td>
+        <td>${row.hit ? `<span class="badge ok">Pass</span>` : `<span class="badge bad">Miss</span>`}</td>
+      </tr>`).join("");
+    box.innerHTML = `
+      <div class="tiles">
+        <div class="tile"><div class="k">Recall@${r.k}</div><div class="v">${Math.round(r.recall_at_k * 100)}%</div>
+          <div class="s">right file in the top ${r.k} for ${hits} of ${r.n} questions</div></div>
+        <div class="tile"><div class="k">MRR</div><div class="v">${r.mrr.toFixed(2)}</div>
+          <div class="s">1.00 means the right file always ranks first</div></div>
+        <div class="tile"><div class="k">Ranked first</div><div class="v">${r.ranked_first} of ${r.n}</div>
+          <div class="s">questions where the right file is the top hit</div></div>
+      </div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th>ID</th><th>Question</th><th>Expected file</th><th class="num">Rank</th><th>Result</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div class="row-actions">
+        <p class="note">Scored live from <code>eval/golden_set.json</code>. The unanswerable question (q11) is left out of retrieval scoring;
+          it tests whether the agent refuses to guess. Answer accuracy needs a model: <code>python eval\\run_eval.py --answers</code></p>
+        <button class="btn ghost" id="rerun" type="button">Run again</button>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  }
+}
+
+function showTab(name) {
+  for (const tab of document.querySelectorAll(".tab")) {
+    const on = tab.dataset.tab === name;
+    tab.classList.toggle("active", on);
+    tab.setAttribute("aria-selected", String(on));
+  }
+  for (const section of document.querySelectorAll("main > section")) section.hidden = section.id !== `tab-${name}`;
+  if (name === "eval" && !state.evalLoaded) loadEval();
+}
+
+function renderSamples(samples) {
+  const byId = Object.fromEntries(samples.map((s) => [s.id, s]));
+  const featured = FEATURED.map((id) => byId[id]).filter(Boolean);
+  const rest = samples.filter((s) => !FEATURED.includes(s.id));
+  const chip = (s) => `<button type="button" class="chip" data-q="${esc(s.question)}">${esc(s.question)}${
+    s.answerable ? "" : ` <span class="tag">not in the code</span>`}</button>`;
+  $("#samples").innerHTML = `<span class="label">Try</span>${featured.map(chip).join("")}${
+    rest.length ? `<button type="button" class="chip more" id="more">+${rest.length} more</button><span id="rest" hidden>${rest.map(chip).join("")}</span>` : ""}`;
+}
+
+async function init() {
+  try {
+    const s = await api("/api/status");
+    state.status = s;
+    const pill = $("#mode");
+    if (s.mode === "agent") {
+      const provider = s.model.provider === "ollama" ? "Ollama" : "Amazon Bedrock";
+      pill.className = "pill live";
+      pill.innerHTML = `<span class="dot"></span>Agent &middot; ${esc(provider)} &middot; ${esc(s.model.model_id)}`;
+    } else {
+      pill.className = "pill";
+      pill.innerHTML = `<span class="dot"></span>Offline &middot; retrieval only`;
+    }
+    pill.title = s.mode === "agent" ? "Full agent answers from the connected model" : "No model connected: shows what search_code retrieves";
+    renderSamples(s.samples);
+    $("#footer-repo").textContent = `${s.repo}: ${s.files} files, ${s.chunks} chunks`;
+    $("#budget").textContent = s.tool_budget;
+  } catch (err) {
+    $("#mode").innerHTML = `<span class="dot"></span>Server not reachable`;
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (target.closest("#more")) {
+    $("#rest").hidden = false;
+    target.closest("#more").remove();
+    return;
+  }
+  const cite = target.closest(".cite");
+  if (cite) { openFile(cite.dataset.path, Number(cite.dataset.start), Number(cite.dataset.end)); return; }
+  const chip = target.closest(".chip[data-q]");
+  if (chip) { ask(chip.dataset.q); return; }
+  const tab = target.closest(".tab");
+  if (tab) { showTab(tab.dataset.tab); return; }
+  if (target.closest("#rerun")) { loadEval(); return; }
+  if (target.closest("#viewer-close") || target.id === "viewer") closeViewer();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("#viewer").hidden) closeViewer();
+});
+
+$("#ask-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  ask($("#q").value);
+});
+
+init();
+$("#q").focus();
+</script>
+</body>
+</html>

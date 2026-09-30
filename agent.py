@@ -1,28 +1,38 @@
-"""Codebase Q&A agent, hosted on Amazon Bedrock AgentCore Runtime.
+"""Codebase Q&A agent, built for Amazon Bedrock AgentCore Runtime.
 
 The agent is a Strands agent with two tools (search_code, read_file). AgentCore Runtime
 hosts it behind an HTTP endpoint; BedrockAgentCoreApp wires the entrypoint to that contract.
 
-Run locally:   python agent.py            (serves on localhost:8080)
+Model choice (environment variables, read on every question):
+    MODEL_PROVIDER=bedrock   (default) Amazon Bedrock; MODEL_ID picks the model, needs AWS credentials
+    MODEL_PROVIDER=ollama    a local model served by Ollama; MODEL_ID picks it (default qwen2.5:7b)
+    OLLAMA_HOST              Ollama address (default http://127.0.0.1:11434)
+
+Run locally:   python agent.py            (serves the AgentCore contract on localhost:8080)
+Demo UI:       python demo.py             (see README)
 Deploy:        agentcore configure --entrypoint agent.py && agentcore launch
 """
 
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
+from typing import Any
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
 
+from agent_trace import extract_tool_trace
 from retriever import CodeIndex
 
 REPO_ROOT = Path(os.environ.get("REPO_ROOT", Path(__file__).parent / "sample_repo"))
 MAX_TOOL_CALLS = int(os.environ.get("MAX_TOOL_CALLS", "8"))
-MODEL_ID = os.environ.get("MODEL_ID")  # set to a Bedrock model your account has enabled
+DEFAULT_OLLAMA_MODEL = "qwen2.5:7b"
 
 index = CodeIndex(REPO_ROOT)
 _calls = {"count": 0}
+_run_lock = threading.Lock()
 
 
 def _budget_exceeded() -> bool:
@@ -72,19 +82,67 @@ Rules:
 3. If the code does not contain the answer, say exactly: "Not found in the code." Never guess.
 4. You are read only. Never claim to have changed code."""
 
-agent_kwargs = {"system_prompt": SYSTEM_PROMPT, "tools": [search_code, read_file]}
-if MODEL_ID:
-    from strands.models import BedrockModel
 
-    agent_kwargs["model"] = BedrockModel(model_id=MODEL_ID)
+def model_settings() -> dict[str, str]:
+    """The provider and model the next question will use, from the environment."""
+    provider = os.environ.get("MODEL_PROVIDER", "bedrock").strip().lower() or "bedrock"
+    if provider not in {"bedrock", "ollama"}:
+        raise ValueError(f"MODEL_PROVIDER must be bedrock or ollama, not {provider!r}")
+    model_id = os.environ.get("MODEL_ID", "").strip()
+    if provider == "ollama":
+        return {
+            "provider": provider,
+            "model_id": model_id or DEFAULT_OLLAMA_MODEL,
+            "host": os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434"),
+        }
+    return {"provider": provider, "model_id": model_id or "Strands default Bedrock model"}
 
-agent = Agent(**agent_kwargs)
-app = BedrockAgentCoreApp()
+
+def build_model() -> Any:
+    """A Strands model object for the configured provider, or None for the Strands Bedrock default."""
+    settings = model_settings()
+    if settings["provider"] == "ollama":
+        from strands.models.ollama import OllamaModel
+
+        return OllamaModel(host=settings["host"], model_id=settings["model_id"], temperature=0)
+    if os.environ.get("MODEL_ID", "").strip():
+        from strands.models import BedrockModel
+
+        return BedrockModel(model_id=settings["model_id"])
+    return None
+
+
+def create_agent() -> Agent:
+    """A fresh agent, so every question starts without earlier conversation."""
+    kwargs: dict[str, Any] = {
+        "system_prompt": SYSTEM_PROMPT,
+        "tools": [search_code, read_file],
+        "callback_handler": None,
+    }
+    model = build_model()
+    if model is not None:
+        kwargs["model"] = model
+    return Agent(**kwargs)
+
+
+def ask_with_trace(question: str) -> dict[str, Any]:
+    """Answer one question and report which tools the agent called and what they returned."""
+    with _run_lock:  # the tool call budget is shared state, so run one question at a time
+        _calls["count"] = 0
+        agent = create_agent()
+        result = agent(question)
+        return {
+            "answer": str(result).strip(),
+            "tool_calls": extract_tool_trace(agent.messages),
+            "tool_budget": MAX_TOOL_CALLS,
+        }
 
 
 def ask(question: str) -> str:
-    _calls["count"] = 0
-    return str(agent(question))
+    return ask_with_trace(question)["answer"]
+
+
+app = BedrockAgentCoreApp()
 
 
 @app.entrypoint
