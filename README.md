@@ -1,10 +1,46 @@
 # Codebase Q&A Agent on Amazon Bedrock AgentCore
 
-A proof of concept agent that answers questions about a Java Spring Boot codebase, cites file and line references, and refuses to guess. It is hosted on **Amazon Bedrock AgentCore Runtime** and built with the **Strands Agents SDK**. The point of the project is the accuracy measurement around it, not just the agent.
+A proof of concept agent that answers questions about a Java Spring Boot codebase, cites file and line references, and refuses to guess. It is built for **Amazon Bedrock AgentCore Runtime** with the **Strands Agents SDK**, and includes a local demo that runs without AWS. The point of the project is the accuracy measurement around it, not just the agent.
 
 ## Use case
 
 Engineers modernizing or migrating a legacy Java service spend hours finding where behavior lives (retries, idempotency, event publishing). This agent retrieves the relevant code, answers from it, and cites `path:start-end` for every claim so a reviewer can verify in seconds.
+
+## Try the demo locally
+
+![The demo in offline mode, showing the code retrieved for "Can a shipped order be cancelled?"](docs/demo.png)
+
+`demo.py` serves a small web app on your own machine (it listens on 127.0.0.1 only). Ask a question, click any citation to open the exact lines, and see the retrieval evaluation computed live.
+
+| Mode | What you see | Needs |
+|---|---|---|
+| Offline (default) | The code `search_code` retrieves for your question, ranked, with clickable file and line citations | Python 3.10+ only |
+| Local model | Full agent answers, a citation check, and the step by step tool trace | [Ollama](https://ollama.com) and a model that supports tool calling |
+| Amazon Bedrock | The same, using a model on Bedrock | AWS credentials and Bedrock model access |
+
+On Windows (PowerShell), from the repository folder:
+
+```powershell
+.venv\Scripts\Activate.ps1
+
+# Offline: no model and no AWS needed
+python demo.py
+
+# Local model through Ollama (free, runs on your machine)
+ollama pull qwen2.5:7b
+pip install -r requirements.txt "strands-agents[ollama]"
+python demo.py --llm ollama --model qwen2.5:7b
+
+# Amazon Bedrock
+python demo.py --llm bedrock --model <a Bedrock model ID enabled in your account>
+```
+
+The browser opens at http://localhost:8765. Use `--port` to change the port and `--no-browser` to skip opening a tab. Stop the demo with Ctrl+C.
+
+Notes:
+- A 7B model on a laptop CPU can take a minute per question. A smaller model such as `qwen2.5:3b` is faster but may call tools less reliably.
+- Answers from a local model show how the agent works; they are not Bedrock results. Record which model produced any numbers you quote.
+- The agent loop is tested against a fake Ollama server (`tests/test_agent_loop.py`), so the tool calling, trace, and citation check are verified without a real model.
 
 ## Architecture
 
@@ -52,8 +88,10 @@ flowchart LR
 
 | Piece | What it does |
 |---|---|
-| `agent.py` | Strands agent wrapped with `BedrockAgentCoreApp`; `@app.entrypoint` accepts `{"prompt": "..."}` |
+| `agent.py` | Strands agent wrapped with `BedrockAgentCoreApp`; `@app.entrypoint` accepts `{"prompt": "..."}`; `MODEL_PROVIDER` picks Bedrock or a local Ollama model; every question starts a fresh agent |
 | `retriever.py` | Chunks code at method boundaries, ranks with BM25 (no external dependencies) |
+| `demo.py`, `web/index.html` | Local demo web app: retrieval view, agent answers with a citation check and tool trace, live evaluation |
+| `agent_trace.py` | Pulls the tool call trace and citations out of an agent run (standard library only) |
 | Tool call budget | Caps tool calls per question (default 8) so the agent cannot loop or run up cost |
 | Path guard | `read_file` refuses any path outside the repo root |
 | System prompt | Answer only from retrieved code, cite every claim, say "Not found in the code." otherwise |
@@ -111,7 +149,7 @@ The MRR below 1.0 shows where ranking is imperfect: the timeout question (q8) ra
 
 q8 still ranks 2nd because the top hit, `PaymentClient.java`, has a comment that also mentions those timeouts. I did not tune further, since that would fit the eval set instead of improving retrieval. Semantic retrieval (below) is the next test.
 
-Answer accuracy requires Bedrock access and has not been run yet: `python eval/run_eval.py --answers`. Add the results here once it has.
+Answer accuracy needs a model and has not been run yet. With Bedrock: `python eval/run_eval.py --answers`. With a local model, set `MODEL_PROVIDER=ollama` and `MODEL_ID=qwen2.5:7b` first. Record which model produced the numbers before adding them here.
 
 ## Run it
 
@@ -135,7 +173,15 @@ agentcore launch
 agentcore invoke '{"prompt": "What happens when the payment circuit breaker opens?"}'
 ```
 
-Point it at your own repo with `REPO_ROOT=/path/to/repo`.
+Point it at your own repo with `REPO_ROOT=/path/to/repo`. To use a local model instead of Bedrock, set `MODEL_PROVIDER=ollama` and `MODEL_ID` to an Ollama model.
+
+### Tests
+
+```bash
+python -m unittest discover tests -v
+```
+
+The retriever, demo server, and trace tests use only the standard library. The agent loop tests run when `strands-agents[ollama]` and `bedrock-agentcore` are installed, and are skipped otherwise. CI runs the tests and the retrieval eval on every push and pull request.
 
 ### Windows (PowerShell)
 
@@ -172,7 +218,7 @@ Troubleshooting:
 
 ## Next steps
 
-1. **Semantic retrieval:** add Amazon Titan embeddings and a vector store, then compare recall@k and MRR against the BM25 baseline using the same golden set.
+1. **Semantic retrieval:** add Amazon Titan embeddings and a vector store, then compare recall@k and MRR against the BM25 baseline using the same golden set. BM25 has no stemming, so "retries" in a question does not match "retry" in `application.yml`; embeddings should close gaps like that.
 2. **AgentCore Gateway:** expose repo search as a tool through Gateway so other agents can reuse it.
 3. **AgentCore Memory:** keep conversation context across a code review session.
 4. **AgentCore Observability:** trace every tool call and track latency and cost per question.

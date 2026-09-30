@@ -75,7 +75,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cases = json.loads((ROOT / "eval" / "golden_set.json").read_text())
+    cases = json.loads((ROOT / "eval" / "golden_set.json").read_text(encoding="utf-8"))
     index = CodeIndex(ROOT / "sample_repo")
 
     r = retrieval_eval(index, cases, args.k)

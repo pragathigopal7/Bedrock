@@ -103,14 +103,27 @@ class CodeIndex:
         scored.sort(key=lambda x: x[0], reverse=True)
         return scored[:top_k]
 
-    def read_lines(self, rel_path: str, start: int, end: int) -> str:
-        """Read a line range, refusing anything outside the repo root."""
+    @property
+    def files(self) -> list[str]:
+        """Relative paths of every indexed file."""
+        return sorted({chunk.path for chunk in self.chunks})
+
+    def _safe_path(self, rel_path: str) -> Path:
+        """Resolve a repo relative path, refusing anything outside the repo root."""
         target = (self.root / rel_path).resolve()
         if self.root not in target.parents and target != self.root:
             raise ValueError("path is outside the repository")
         if not target.is_file():
             raise FileNotFoundError(rel_path)
-        lines = target.read_text(encoding="utf-8", errors="ignore").splitlines()
+        return target
+
+    def file_lines(self, rel_path: str) -> list[str]:
+        """Every line of a file inside the repo, without line numbers."""
+        return self._safe_path(rel_path).read_text(encoding="utf-8", errors="ignore").splitlines()
+
+    def read_lines(self, rel_path: str, start: int, end: int) -> str:
+        """Read a line range, refusing anything outside the repo root."""
+        lines = self.file_lines(rel_path)
         start = max(1, start)
         end = min(len(lines), max(start, end))
         return "\n".join(f"{i}: {lines[i - 1]}" for i in range(start, end + 1))

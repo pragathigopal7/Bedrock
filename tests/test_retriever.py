@@ -93,10 +93,23 @@ class ReadLinesTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.index.read_lines("src/does_not_exist.java", 1, 5)
 
+    def test_file_lines_match_numbered_read(self):
+        lines = self.index.file_lines("src/main/resources/application.yml")
+        numbered = self.index.read_lines("src/main/resources/application.yml", 1, len(lines))
+        self.assertEqual([row.split(": ", 1)[1] if ": " in row else "" for row in numbered.splitlines()][:3], lines[:3])
+
+    def test_file_lines_share_the_path_guard(self):
+        with self.assertRaises(ValueError):
+            self.index.file_lines("../README.md")
+
+    def test_files_lists_every_indexed_file(self):
+        self.assertIn("src/main/resources/application.yml", self.index.files)
+        self.assertEqual(len(self.index.files), len(set(self.index.files)))
+
 
 class GoldenSetTests(unittest.TestCase):
     def test_recall_at_3_stays_high(self):
-        cases = json.loads((ROOT / "eval" / "golden_set.json").read_text())
+        cases = json.loads((ROOT / "eval" / "golden_set.json").read_text(encoding="utf-8"))
         result = retrieval_eval(CodeIndex(SAMPLE_REPO), cases, k=3)
         self.assertGreaterEqual(result["recall_at_k"], 0.9)
 
